@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MC Bedrock 3D Item Creator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0e14;--bg2:#13151f;--bg3:#1c1f2e;--bg4:#232740;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+  --cyan:#67e8f9;--cyan2:rgba(103,232,249,0.12);--cyan3:rgba(103,232,249,0.25);
+  --green:#4ade80;--green-bg:rgba(74,222,128,0.1);
+  --amber:#fbbf24;--amber-bg:rgba(251,191,36,0.1);
+  --red:#f87171;--purple:#a78bfa;--purple-bg:rgba(167,139,250,0.1);
+  --text:#eef2ff;--muted:#8892a4;--faint:#3d4460;
+  --accent:#6366f1;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;display:flex;flex-direction:column}
+
+/* ── HEADER ── */
+.hdr{
+  height:54px;min-height:54px;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;padding:0 1.25rem;
+}
+.hdr-icon{width:34px;height:34px;border-radius:8px;background:var(--cyan2);border:1px solid var(--cyan3);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.hdr h1{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.hdr p{font-size:11px;color:var(--muted);margin-top:1px}
+.hdr-gap{flex:1}
+.hdr-pill{font-size:10px;font-weight:600;background:var(--cyan2);border:1px solid var(--cyan3);color:var(--cyan);border-radius:20px;padding:3px 10px;letter-spacing:.04em}
+
+/* ── MAIN 3-PANEL ── */
+.main{display:flex;flex:1;overflow:hidden;min-height:0}
+
+/* ── LEFT PANEL ── */
+.pl{width:230px;min-width:210px;background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;gap:.75rem;padding:.875rem}
+
+/* ── VIEWPORT ── */
+.vp{flex:1;position:relative;background:var(--bg);overflow:hidden;min-width:200px}
+#glCanvas{display:block;width:100%;height:100%}
+.vp-toolbar{
+  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  display:flex;gap:4px;align-items:center;
+  background:rgba(12,14,20,0.88);border:1px solid var(--border2);
+  border-radius:20px;padding:4px 8px;
+}
+.vb{padding:4px 10px;border-radius:12px;border:none;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.vb:hover{background:var(--bg3);color:var(--text)}
+.vb.on{background:var(--bg4);color:var(--cyan)}
+.vb-sep{width:1px;height:14px;background:var(--border2);margin:0 2px}
+.vp-overlay{
+  position:absolute;top:10px;left:10px;
+  background:rgba(12,14,20,0.8);border:1px solid var(--border);
+  border-radius:8px;padding:8px 12px;font-size:10px;color:var(--muted);line-height:1.8;
+  pointer-events:none;max-width:200px;
+}
+.vp-overlay b{color:var(--text);font-weight:500}
+.vp-overlay.hidden{display:none}
+.vp-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none}
+.vp-empty-icon{font-size:52px;opacity:.1}
+.vp-empty-txt{font-size:12px;color:var(--faint);text-align:center;line-height:1.6}
+
+/* ── RIGHT PANEL ── */
+.pr{width:262px;min-width:240px;background:var(--bg2);border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;gap:.75rem;padding:.875rem}
+
+/* ── SHARED COMPONENTS ── */
+.slabel{font-size:10px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.scard{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:.75rem}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+input[type=text],select{
+  width:100%;background:var(--bg4);border:1px solid var(--border2);
+  border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;
+  outline:none;transition:border-color .15s;
+}
+input[type=text]:focus,select:focus{border-color:var(--cyan)}
+select option{background:var(--bg4)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.field{display:flex;flex-direction:column;gap:4px}
+
+/* Drop zone */
+.dz{
+  border:1.5px dashed rgba(103,232,249,0.22);border-radius:10px;padding:.875rem;
+  text-align:center;cursor:pointer;transition:all .15s;background:var(--cyan2);
+}
+.dz:hover,.dz.drag{border-color:var(--cyan);background:rgba(103,232,249,0.15)}
+.dz-icon{font-size:20px;margin-bottom:5px}
+.dz-h{font-size:12px;font-weight:600;color:var(--cyan);margin-bottom:3px}
+.dz-p{font-size:10px;color:var(--muted);line-height:1.5}
+
+/* Loaded cards */
+.model-card{background:var(--bg4);border:1px solid rgba(103,232,249,0.2);border-radius:8px;padding:8px 10px}
+.model-card .mc-name{font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.model-card .mc-stat{font-size:10px;color:var(--muted);line-height:1.8}
+.model-card .mc-stat b{color:var(--cyan)}
+.model-card .mc-clear{float:right;background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0;line-height:1}
+
+/* Texture preview */
+.tex-wrap{background:repeating-conic-gradient(#1c1f2e 0% 25%,#13151f 0% 50%) 0 0/14px 14px;border-radius:8px;overflow:hidden;border:1px solid var(--border2);position:relative}
+.tex-wrap img{display:block;width:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+.tex-clear{position:absolute;top:5px;right:5px;background:rgba(0,0,0,0.7);border:none;color:var(--red);cursor:pointer;font-size:13px;border-radius:4px;padding:2px 6px;line-height:1}
+
+/* File tree */
+.ftree{font-family:'Consolas','Courier New',monospace;font-size:10px;line-height:1.9;color:var(--muted)}
+.ftree .dir{color:var(--amber)}
+.ftree .fnew{color:var(--green)}
+.ftree .fi{color:var(--muted)}
+.ftree .ind{padding-left:12px}
+
+/* Buttons */
+.btn{display:block;width:100%;padding:9px 14px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;text-align:center;transition:filter .15s,transform .1s}
+.btn:active{transform:scale(.98)}
+.btn-cyan{background:var(--cyan);color:#03111a}
+.btn-cyan:hover{filter:brightness(1.08)}
+.btn-cyan:disabled{opacity:.3;cursor:not-allowed;filter:none;transform:none}
+.btn-ghost{background:var(--bg4);color:var(--muted);border:1px solid var(--border2)}
+.btn-ghost:hover{color:var(--text);background:var(--bg3)}
+
+/* Tags */
+.tag{display:inline-flex;align-items:center;font-size:10px;border-radius:4px;padding:2px 7px;font-family:monospace;font-weight:600}
+.tc{background:var(--cyan2);color:var(--cyan);border:1px solid var(--cyan3)}
+.tg{background:var(--green-bg);color:var(--green);border:1px solid rgba(74,222,128,.25)}
+.ta{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(251,191,36,.25)}
+.tp{background:var(--purple-bg);color:var(--purple);border:1px solid rgba(167,139,250,.25)}
+
+/* Notif */
+.notif{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#192030;border:1px solid var(--border2);border-radius:20px;padding:7px 16px;font-size:12px;color:var(--cyan);opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;z-index:9999}
+.notif.on{opacity:1}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+hr.div{border:none;border-top:1px solid var(--border);margin:2px 0}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-icon">🧊</div>
+  <div>
+    <h1>MC Bedrock 3D Item Creator</h1>
+    <p>Modelo · Textura · Preview 3D · Genera el .mcaddon automáticamente</p>
+  </div>
+  <div class="hdr-gap"></div>
+  <span class="hdr-pill">BEDROCK 1.20+</span>
+</div>
+
+<div class="main">
+
+<!-- ══ LEFT PANEL ══ -->
+<div class="pl">
+
+  <div>
+    <div class="slabel">Identificador del Item</div>
+    <div class="scard" style="display:flex;flex-direction:column;gap:8px">
+      <div class="field">
+        <label>Namespace</label>
+        <input type="text" id="namespace" value="mypack" placeholder="mypack" oninput="updateTree()">
+      </div>
+      <div class="field">
+        <label>Item ID</label>
+        <input type="text" id="itemId" value="custom_sword" placeholder="custom_sword" oninput="updateTree()">
+      </div>
+      <div class="field">
+        <label>Nombre en juego</label>
+        <input type="text" id="displayName" value="Custom Sword" placeholder="Custom Sword">
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="slabel">Propiedades</div>
+    <div class="scard" style="display:flex;flex-direction:column;gap:8px">
+      <div class="field">
+        <label>Categoría</label>
+        <select id="category">
+          <option value="Equipment">Equipment</option>
+          <option value="Items" selected>Items</option>
+          <option value="Nature">Nature</option>
+          <option value="Construction">Construction</option>
+          <option value="None">None</option>
+        </select>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Stack máx.</label>
+          <input type="text" id="stackSize" value="1" style="width:100%">
+        </div>
+        <div class="field">
+          <label>Durabilidad</label>
+          <input type="text" id="durability" value="0" style="width:100%" placeholder="0=sin">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="slabel">Info del Pack</div>
+    <div class="scard" style="display:flex;flex-direction:column;gap:8px">
+      <div class="field">
+        <label>Nombre del pack</label>
+        <input type="text" id="packName" value="Mi Item Pack" oninput="updateTree()">
+      </div>
+      <div class="field">
+        <label>Autor</label>
+        <input type="text" id="packAuthor" value="Player">
+      </div>
+    </div>
+  </div>
+
+  <div id="modelInfoBox" style="display:none">
+    <div class="slabel">Info del Modelo</div>
+    <div id="modelInfoInner" class="scard" style="font-size:10px;color:var(--muted);line-height:1.9"></div>
+  </div>
+
+  <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+    <button class="btn btn-ghost" onclick="resetScene()">↺ Resetear cámara</button>
+  </div>
+
+</div>
+
+<!-- ══ VIEWPORT ══ -->
+<div class="vp" id="viewport">
+  <canvas id="glCanvas"></canvas>
+  <div class="vp-empty" id="vpEmpty">
+    <div class="vp-empty-icon">🧊</div>
+    <div class="vp-empty-txt">Sube un modelo .geo.json u .obj<br>para ver el preview 3D</div>
+  </div>
+  <div class="vp-overlay hidden" id="vpOverlay"></div>
+  <div class="vp-toolbar">
+    <button class="vb" id="btnWire" onclick="toggleWire()">Wireframe</button>
+    <div class="vb-sep"></div>
+    <button class="vb" id="btnGrid" onclick="toggleGrid()" style="color:var(--cyan)">Grid</button>
+    <div class="vb-sep"></div>
+    <button class="vb" onclick="resetScene()">⟳ Reset</button>
+    <div class="vb-sep"></div>
+    <span id="vpFps" style="font-size:10px;color:var(--faint);padding:0 4px;min-width:36px;text-align:right"></span>
+  </div>
+</div>
+
+<!-- ══ RIGHT PANEL ══ -->
+<div class="pr">
+
+  <!-- Model upload -->
+  <div>
+    <div class="slabel">Modelo 3D</div>
+    <div id="modelDropArea">
+      <div class="dz" id="modelDz" onclick="document.getElementById('modelFile').click()"
+           ondragover="dzOver(event,'modelDz')" ondragleave="dzLeave('modelDz')" ondrop="dzDrop(event,'modelDz',handleModelFile)">
+        <div class="dz-icon">📐</div>
+        <div class="dz-h">Arrastra o haz clic</div>
+        <div class="dz-p">.geo.json — formato nativo Bedrock<br>.obj — se convierte automáticamente</div>
+      </div>
+      <input type="file" id="modelFile" accept=".json,.geo.json,.obj" style="display:none" onchange="handleModelFile(this.files[0])">
+    </div>
+    <div id="modelCard" style="display:none"></div>
+  </div>
+
+  <!-- Texture upload -->
+  <div>
+    <div class="slabel">Textura</div>
+    <div id="texDropArea">
+      <div class="dz" id="texDz" onclick="document.getElementById('texFile').click()"
+           ondragover="dzOver(event,'texDz')" ondragleave="dzLeave('texDz')" ondrop="dzDrop(event,'texDz',handleTexFile)">
+        <div class="dz-icon">🎨</div>
+        <div class="dz-h">Sube la textura</div>
+        <div class="dz-p">.png · Recomendado 16×16, 32×32 o 64×64<br>Se mostrará en el modelo 3D</div>
+      </div>
+      <input type="file" id="texFile" accept="image/png,image/jpeg" style="display:none" onchange="handleTexFile(this.files[0])">
+    </div>
+    <div id="texCard" style="display:none"></div>
+  </div>
+
+  <!-- File tree -->
+  <div>
+    <div class="slabel">Estructura del Addon</div>
+    <div class="scard">
+      <div class="ftree" id="fileTree">
+        <span style="color:var(--faint)">— configura el item para ver la estructura —</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generate -->
+  <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+    <button class="btn btn-cyan" id="genBtn" onclick="generateAddon()" disabled>
+      ⬇ Generar .mcaddon
+    </button>
+    <div id="genStatus" style="font-size:11px;color:var(--muted);text-align:center;min-height:14px"></div>
+  </div>
+
+</div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+/* ───────────────────────────────────────────
+   STATE
+─────────────────────────────────────────── */
+let scene, camera, renderer, controls, gridHelper;
+let currentMesh = null;
+let wireframeMesh = null;
+let threeTexture = null;
+let wireMode = false;
+let gridOn = true;
+let modelState = null;   // { type, rawText, geoJson, geometry, identifier, bones, cubes, tw, th, fileName }
+let textureState = null; // { dataUrl, width, height, fileName }
+let fpsLast = 0, fpsCnt = 0;
+
+/* ───────────────────────────────────────────
+   UTILS
+─────────────────────────────────────────── */
+function uuid4(){
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+    const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16);
+  });
+}
+let ntTimer=null;
+function notify(msg){
+  const el=document.getElementById('notif');
+  el.textContent=msg;el.classList.add('on');
+  clearTimeout(ntTimer);ntTimer=setTimeout(()=>el.classList.remove('on'),2200);
+}
+function setStatus(msg){document.getElementById('genStatus').textContent=msg}
+function updateGenBtn(){
+  document.getElementById('genBtn').disabled = !modelState;
+}
+
+/* ───────────────────────────────────────────
+   THREE.JS INIT
+─────────────────────────────────────────── */
+function initThree(){
+  const vp = document.getElementById('viewport');
+  const canvas = document.getElementById('glCanvas');
+
+  renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(0x0c0e14,1);
+  renderer.shadowMap.enabled = false;
+
+  const w=vp.clientWidth, h=vp.clientHeight;
+  renderer.setSize(w,h,false);
+
+  camera = new THREE.PerspectiveCamera(40, w/h, 0.05, 2000);
+  camera.position.set(18,14,18);
+
+  scene = new THREE.Scene();
+
+  gridHelper = new THREE.GridHelper(32,32, 0x1c1f2e, 0x1c1f2e);
+  scene.add(gridHelper);
+
+  const amb = new THREE.AmbientLight(0xd0e8ff, 0.55);
+  scene.add(amb);
+
+  const sun = new THREE.DirectionalLight(0xfff0e0, 0.9);
+  sun.position.set(8,14,10);
+  scene.add(sun);
+
+  const back = new THREE.DirectionalLight(0x3050a0, 0.25);
+  back.position.set(-6,-4,-8);
+  scene.add(back);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.minDistance = 1;
+  controls.maxDistance = 400;
+  controls.target.set(0,4,0);
+
+  const ro = new ResizeObserver(()=>{
+    const w=vp.clientWidth, h=vp.clientHeight;
+    renderer.setSize(w,h,false);
+    camera.aspect=w/h;
+    camera.updateProjectionMatrix();
+  });
+  ro.observe(vp);
+
+  animate();
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene,camera);
+  fpsCnt++;
+  const now=performance.now();
+  if(now-fpsLast>800){
+    document.getElementById('vpFps').textContent=Math.round(fpsCnt/(now-fpsLast)*1000)+' fps';
+    fpsLast=now;fpsCnt=0;
+  }
+}
+
+function resetScene(){
+  controls.target.set(0,4,0);
+  camera.position.set(18,14,18);
+  controls.update();
+}
+
+function toggleWire(){
+  wireMode=!wireMode;
+  document.getElementById('btnWire').classList.toggle('on',wireMode);
+  if(!currentMesh) return;
+  currentMesh.material.wireframe = wireMode;
+}
+
+function toggleGrid(){
+  gridOn=!gridOn;
+  gridHelper.visible=gridOn;
+  document.getElementById('btnGrid').classList.toggle('on',gridOn);
+  if(gridOn) document.getElementById('btnGrid').style.color='var(--cyan)';
+  else document.getElementById('btnGrid').style.color='';
+}
+
+/* ───────────────────────────────────────────
+   GEO.JSON PARSER → THREE.BufferGeometry
+─────────────────────────────────────────── */
+function parseGeoJson(jsonData){
+  const geoArr = jsonData['minecraft:geometry'];
+  if(!geoArr || !geoArr.length) return null;
+  const geo = geoArr[0];
+  const desc = geo.description || {};
+  const tw = desc.texture_width || 64;
+  const th = desc.texture_height || 64;
+  const identifier = desc.identifier || 'geometry.custom';
+
+  const allPos=[], allNorm=[], allUV=[], allIdx=[];
+  let vi=0, totalCubes=0, totalBones=0;
+
+  for(const bone of geo.bones||[]){
+    totalBones++;
+    const cubes = bone.cubes || bone.cube || [];
+    totalCubes += cubes.length;
+
+    for(const cube of cubes){
+      const [ox,oy,oz] = cube.origin||[0,0,0];
+      const [sx,sy,sz] = cube.size||[1,1,1];
+      const inf = cube.inflate||0;
+
+      const x0=ox-inf, x1=ox+sx+inf;
+      const y0=oy-inf, y1=oy+sy+inf;
+      const z0=-(oz+sz+inf), z1=-(oz-inf);
+
+      const faces = buildCubeFaces(x0,y0,z0,x1,y1,z1, cube.uv, sx,sy,sz, tw,th);
+      for(const face of faces){
+        for(let i=0;i<4;i++){
+          allPos.push(...face.pts[i]);
+          allNorm.push(...face.n);
+          allUV.push(face.uvs[i][0], face.uvs[i][1]);
+        }
+        allIdx.push(vi,vi+1,vi+2, vi,vi+2,vi+3);
+        vi+=4;
+      }
+    }
+  }
+
+  if(vi===0) return null;
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(allPos,3));
+  g.setAttribute('normal',   new THREE.Float32BufferAttribute(allNorm,3));
+  g.setAttribute('uv',       new THREE.Float32BufferAttribute(allUV,2));
+  g.setIndex(allIdx);
+  return { geometry:g, identifier, tw, th, bones:totalBones, cubes:totalCubes };
+}
+
+function buildCubeFaces(x0,y0,z0,x1,y1,z1, uvData, sx,sy,sz, tw,th){
+  const faces=[];
+
+  function addFace(pts, n, uvPix){
+    if(!uvPix) return;
+    const uvs = uvPix.map(([u,v])=>[u/tw, 1-v/th]);
+    faces.push({pts,n,uvs});
+  }
+
+  let fp; // face pixel regions { top,bottom,north,south,east,west }
+
+  if(Array.isArray(uvData) && uvData.length>=2){
+    const [u,v]=uvData;
+    fp = {
+      top:   [[u+sz,v],[u+sz,v+sz],[u+sz+sx,v+sz],[u+sz+sx,v]],
+      bottom:[[u+sz+sx+sx,v],[u+sz+sx+sx,v+sz],[u+sz+sx,v+sz],[u+sz+sx,v]],
+      west:  [[u+sz,v+sz],[u+sz,v+sz+sy],[u,v+sz+sy],[u,v+sz]],
+      north: [[u+sz,v+sz],[u+sz+sx,v+sz],[u+sz+sx,v+sz+sy],[u+sz,v+sz+sy]],
+      east:  [[u+sz+sx,v+sz],[u+sz+sx+sz,v+sz],[u+sz+sx+sz,v+sz+sy],[u+sz+sx,v+sz+sy]],
+      south: [[u+2*sz+sx,v+sz],[u+2*sz+2*sx,v+sz],[u+2*sz+2*sx,v+sz+sy],[u+2*sz+sx,v+sz+sy]],
+    };
+  } else if(uvData && typeof uvData==='object'){
+    const pf=(face,w,h)=>{
+      const f=uvData[face]; if(!f) return null;
+      const [fu,fv]=f.uv||[0,0]; const [fw,fh]=f.uv_size||[w,h];
+      return [[fu,fv],[fu+fw,fv],[fu+fw,fv+fh],[fu,fv+fh]];
+    };
+    fp={
+      top: pf('up',sx,sz), bottom: pf('down',sx,sz),
+      west:pf('west',sz,sy), north:pf('north',sx,sy),
+      east:pf('east',sz,sy), south:pf('south',sx,sy),
+    };
+  } else {
+    const box=[[0,0],[0,1],[1,1],[1,0]];
+    fp={top:box,bottom:box,west:box,north:box,east:box,south:box};
+  }
+
+  // Top (+Y) — CCW looking from above
+  addFace([[x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]], [0,1,0], fp.top);
+  // Bottom (-Y) — CCW looking from below
+  addFace([[x0,y0,z1],[x0,y0,z0],[x1,y0,z0],[x1,y0,z1]], [0,-1,0], fp.bottom);
+  // North/Front (Three.js +Z = Bedrock -Z)
+  addFace([[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], [0,0,1], fp.north);
+  // South/Back (Three.js -Z = Bedrock +Z)
+  addFace([[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]], [0,0,-1], fp.south);
+  // East (+X)
+  addFace([[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],[x1,y0,z0]], [1,0,0], fp.east);
+  // West (-X)
+  addFace([[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]], [-1,0,0], fp.west);
+
+  return faces;
+}
+
+/* ───────────────────────────────────────────
+   OBJ PARSER → THREE.BufferGeometry
+─────────────────────────────────────────── */
+function parseOBJ(text){
+  const vs=[], vts=[], vns=[];
+  const pos=[], uvs=[], nrm=[];
+  let vi=0;
+
+  for(const raw of text.split('\n')){
+    const line=raw.trim(); if(!line||line[0]==='#') continue;
+    const p=line.split(/\s+/);
+    if(p[0]==='v')  vs.push([+p[1],+p[2],+p[3]]);
+    else if(p[0]==='vt') vts.push([+p[1],+p[2]]);
+    else if(p[0]==='vn') vns.push([+p[1],+p[2],+p[3]]);
+    else if(p[0]==='f'){
+      const pts=p.slice(1).map(s=>{
+        const t=s.split('/');
+        return {v:t[0]?+t[0]-1:-1, t:t[1]?+t[1]-1:-1, n:t[2]?+t[2]-1:-1};
+      });
+      for(let i=1;i<pts.length-1;i++){
+        for(const pt of [pts[0],pts[i],pts[i+1]]){
+          const v=vs[pt.v]||[0,0,0];
+          pos.push(v[0],v[1],-v[2]);
+          const uv=pt.t>=0?vts[pt.t]:[0,0];
+          uvs.push(uv?uv[0]:0, uv?uv[1]:0);
+          const n=pt.n>=0?vns[pt.n]:[0,1,0];
+          nrm.push(n?n[0]:0,n?n[1]:0,n?-(n[2]):0);
+          vi++;
+        }
+      }
+    }
+  }
+
+  if(vi===0) return null;
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('uv',      new THREE.Float32BufferAttribute(uvs,2));
+  g.setAttribute('normal',  new THREE.Float32BufferAttribute(nrm,3));
+  g.computeBoundingBox();
+  return g;
+}
+
+/* ───────────────────────────────────────────
+   OBJ → BEDROCK GEO.JSON (poly_mesh)
+─────────────────────────────────────────── */
+function objToGeoJson(objText, identifier){
+  const vs=[], vts=[], vns=[], polys=[];
+  for(const raw of objText.split('\n')){
+    const line=raw.trim(); if(!line||line[0]==='#') continue;
+    const p=line.split(/\s+/);
+    if(p[0]==='v')  vs.push([+p[1],+p[2],+p[3]]);
+    else if(p[0]==='vt') vts.push([+p[1],+p[2]]);
+    else if(p[0]==='vn') vns.push([+p[1],+p[2],+p[3]]);
+    else if(p[0]==='f'){
+      const pts=p.slice(1).map(s=>{const t=s.split('/');return{v:t[0]?+t[0]-1:0,t:t[1]?+t[1]-1:0,n:t[2]?+t[2]-1:0}});
+      for(let i=1;i<pts.length-1;i++){
+        const tri=[];
+        for(const pt of [pts[0],pts[i],pts[i+1]]) tri.push(pt.v,pt.n,pt.t);
+        polys.push(tri);
+      }
+    }
+  }
+  const bedrockPos = vs.map(([x,y,z])=>[x,y,-z]);
+  const bedrockNrm = vns.length? vns.map(([x,y,z])=>[x,y,-z]) : [[0,1,0]];
+  const bedrockUV  = vts.length? vts : [[0,0]];
+  return {
+    format_version:'1.12.0',
+    'minecraft:geometry':[{
+      description:{ identifier, texture_width:16, texture_height:16 },
+      bones:[{
+        name:'root', pivot:[0,0,0],
+        poly_mesh:{
+          normalized_uvs:true,
+          positions:bedrockPos,
+          normals:bedrockNrm,
+          uvs:bedrockUV,
+          polys
+        }
+      }]
+    }]
+  };
+}
+
+/* ───────────────────────────────────────────
+   LOAD MODEL INTO SCENE
+─────────────────────────────────────────── */
+function loadMeshToScene(geometry){
+  if(currentMesh){ scene.remove(currentMesh); currentMesh.geometry.dispose(); currentMesh=null; }
+
+  const mat = new THREE.MeshStandardMaterial({
+    color:0xffffff,
+    map: threeTexture||null,
+    side: THREE.DoubleSide,
+    wireframe: wireMode,
+  });
+
+  const mesh = new THREE.Mesh(geometry, mat);
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  mesh.position.set(-center.x, -box.min.y, -center.z);
+
+  scene.add(mesh);
+  currentMesh = mesh;
+
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const dist = maxDim * 2.2;
+  camera.position.set(dist, dist*0.75, dist);
+  controls.target.set(0, size.y*0.4, 0);
+  controls.update();
+
+  document.getElementById('vpEmpty').style.display='none';
+}
+
+/* ───────────────────────────────────────────
+   TEXTURE LOADING
+─────────────────────────────────────────── */
+function applyTexture(dataUrl){
+  const loader = new THREE.TextureLoader();
+  loader.load(dataUrl, tex=>{
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.flipY = false;
+    threeTexture = tex;
+    if(currentMesh){
+      currentMesh.material.map = tex;
+      currentMesh.material.needsUpdate = true;
+    }
+  });
+}
+
+/* ───────────────────────────────────────────
+   FILE HANDLERS
+─────────────────────────────────────────── */
+function handleModelFile(file){
+  if(!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const text = e.target.result;
+    let result=null;
+    let geoJsonObj=null;
+
+    try{
+      if(ext==='obj'){
+        const geo = parseOBJ(text);
+        if(!geo) throw new Error('OBJ vacío o inválido');
+        const id = 'geometry.'+val('itemId').replace(/[^a-z0-9_]/gi,'_');
+        geoJsonObj = objToGeoJson(text, id);
+        result = { type:'obj', rawText:text, geoJson:geoJsonObj, geometry:geo,
+          identifier:id, bones:1, cubes:0, tw:16, th:16, fileName:file.name };
+      } else {
+        const json = JSON.parse(text);
+        const parsed = parseGeoJson(json);
+        if(!parsed) throw new Error('geo.json inválido o sin cubes');
+        geoJsonObj = json;
+        result = { type:'geo', rawText:text, geoJson:json, ...parsed, fileName:file.name };
+      }
+    } catch(err){
+      notify('❌ Error: '+err.message);
+      return;
+    }
+
+    modelState = result;
+    loadMeshToScene(result.geometry);
+    showModelCard(result);
+    showModelInfoBox(result);
+    updateTree();
+    updateGenBtn();
+    notify('✓ Modelo cargado: '+file.name);
+  };
+  reader.readAsText(file);
+}
+
+function handleTexFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const dataUrl = e.target.result;
+    const img = new Image();
+    img.onload = ()=>{
+      textureState = { dataUrl, width:img.width, height:img.height, fileName:file.name };
+      applyTexture(dataUrl);
+      showTexCard(file.name, dataUrl, img.width, img.height);
+      updateTree();
+      notify('✓ Textura cargada: '+file.name+' ('+img.width+'×'+img.height+')');
+    };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function showModelCard(m){
+  const card = document.getElementById('modelCard');
+  card.style.display='block';
+  document.getElementById('modelDz').style.display='none';
+  const typeTag = m.type==='geo'
+    ? '<span class="tag tc">geo.json</span>'
+    : '<span class="tag ta">.obj → geo.json</span>';
+  const cubeInfo = m.type==='geo'
+    ? `<br><b>${m.bones}</b> bone${m.bones!==1?'s':''} · <b>${m.cubes}</b> cubo${m.cubes!==1?'s':''}`
+    : `<br><b>poly_mesh</b> (OBJ convertido)`;
+  card.innerHTML=`<div class="model-card">
+    <div class="mc-name"><button class="mc-clear" onclick="clearModel()" title="Quitar modelo">×</button>${m.fileName}</div>
+    <div class="mc-stat">${typeTag}${cubeInfo}<br>ID: <b>${m.identifier}</b></div>
+  </div>`;
+}
+
+function showTexCard(name, dataUrl, w, h){
+  const card = document.getElementById('texCard');
+  card.style.display='block';
+  document.getElementById('texDz').style.display='none';
+  card.innerHTML=`<div style="position:relative;margin-bottom:6px">
+    <div class="tex-wrap"><img src="${dataUrl}" alt="texture"></div>
+    <button class="tex-clear" onclick="clearTexture()" title="Quitar textura">×</button>
+  </div>
+  <div style="font-size:10px;color:var(--muted)">${name} · <b style="color:var(--cyan)">${w}×${h}px</b></div>`;
+}
+
+function showModelInfoBox(m){
+  const box = document.getElementById('modelInfoBox');
+  const inner = document.getElementById('modelInfoInner');
+  box.style.display='block';
+  inner.innerHTML = m.type==='geo'
+    ? `ID: <b style="color:var(--cyan)">${m.identifier}</b><br>Tipo: <b>geo.json nativo</b><br>Bones: <b>${m.bones}</b> · Cubes: <b>${m.cubes}</b><br>Tex: <b>${m.tw}×${m.th}</b>`
+    : `ID: <b style="color:var(--cyan)">${m.identifier}</b><br>Tipo: <b>OBJ → poly_mesh</b><br>El .obj se convierte al generar`;
+}
+
+function clearModel(){
+  modelState=null;
+  if(currentMesh){scene.remove(currentMesh);currentMesh.geometry.dispose();currentMesh=null;}
+  document.getElementById('modelCard').style.display='none';
+  document.getElementById('modelDz').style.display='';
+  document.getElementById('modelInfoBox').style.display='none';
+  document.getElementById('vpEmpty').style.display='';
+  document.getElementById('modelFile').value='';
+  updateTree(); updateGenBtn();
+  notify('Modelo eliminado');
+}
+
+function clearTexture(){
+  textureState=null;
+  threeTexture=null;
+  if(currentMesh){currentMesh.material.map=null;currentMesh.material.needsUpdate=true;}
+  document.getElementById('texCard').style.display='none';
+  document.getElementById('texDz').style.display='';
+  document.getElementById('texFile').value='';
+  updateTree(); notify('Textura eliminada');
+}
+
+/* ───────────────────────────────────────────
+   FILE TREE PREVIEW
+─────────────────────────────────────────── */
+function updateTree(){
+  const ns = val('namespace') || 'mypack';
+  const id = val('itemId') || 'custom_item';
+  const pn = val('packName') || 'Mi Pack';
+  const ft = document.getElementById('fileTree');
+  const texName = textureState ? textureState.fileName : 'item.png';
+  const geoName = modelState ? (modelState.identifier||'geometry.custom')+'.geo.json' : 'model.geo.json';
+  const hasModel = !!modelState;
+  const hasTex = !!textureState;
+
+  ft.innerHTML = `
+<span class="dir">📦 ${pn.replace(/\s/g,'_')}.mcaddon</span>
+<div class="ind">
+  <span class="dir">📁 RP_${pn.replace(/\s/g,'_')}.mcpack</span>
+  <div class="ind">
+    <span class="fi">📄 manifest.json</span><br>
+    <span class="fi">🖼 pack_icon.png</span><br>
+    <span class="dir">📁 attachables/</span>
+    <div class="ind"><span class="${hasModel?'fnew':'fi'}">📄 ${ns}.${id}.json</span></div>
+    <span class="dir">📁 models/entity/</span>
+    <div class="ind"><span class="${hasModel?'fnew':'fi'}">📄 ${ns}.${id}.geo.json</span></div>
+    <span class="dir">📁 textures/items/${ns}/</span>
+    <div class="ind"><span class="${hasTex?'fnew':'fi'}">🖼 ${id}.png</span></div>
+    <span class="dir">📁 textures/</span>
+    <div class="ind"><span class="${hasModel?'fnew':'fi'}">📄 item_texture.json</span></div>
+  </div>
+  <span class="dir">📁 BP_${pn.replace(/\s/g,'_')}.mcpack</span>
+  <div class="ind">
+    <span class="fi">📄 manifest.json</span><br>
+    <span class="fi">🖼 pack_icon.png</span><br>
+    <span class="dir">📁 items/</span>
+    <div class="ind"><span class="${hasModel?'fnew':'fi'}">📄 ${ns}.${id}.json</span></div>
+  </div>
+</div>`;
+}
+
+/* ───────────────────────────────────────────
+   DRAG & DROP
+─────────────────────────────────────────── */
+function dzOver(e, dzId){ e.preventDefault(); document.getElementById(dzId).classList.add('drag'); }
+function dzLeave(dzId){ document.getElementById(dzId).classList.remove('drag'); }
+function dzDrop(e, dzId, handler){
+  e.preventDefault();
+  document.getElementById(dzId).classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if(file) handler(file);
+}
+
+/* ───────────────────────────────────────────
+   GENERATE .mcaddon
+─────────────────────────────────────────── */
+async function generateAddon(){
+  if(!modelState){ notify('❌ Sube un modelo primero'); return; }
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled=true;
+  setStatus('Preparando archivos...');
+
+  const ns   = val('namespace')   || 'mypack';
+  const id   = val('itemId')      || 'custom_item';
+  const dn   = val('displayName') || 'Custom Item';
+  const cat  = val('category')    || 'Items';
+  const ss   = parseInt(val('stackSize'))||1;
+  const dur  = parseInt(val('durability'))||0;
+  const pn   = val('packName')    || 'Mi Pack';
+  const auth = val('packAuthor')  || 'Player';
+  const geoId = modelState.identifier;
+
+  const texPath = `textures/items/${ns}/${id}`;
+
+  /* ── Manifests ── */
+  const rpManifest = {
+    format_version:2,
+    header:{ name:pn+' RP', description:'Resource Pack · '+dn+'\nBy: '+auth,
+      uuid:uuid4(), version:[1,0,0], min_engine_version:[1,20,0] },
+    modules:[{ description:'Resources', type:'resources', uuid:uuid4(), version:[1,0,0] }],
+    dependencies:[]
+  };
+  const rpDepUUID = rpManifest.header.uuid;
+
+  const bpManifest = {
+    format_version:2,
+    header:{ name:pn+' BP', description:'Behavior Pack · '+dn+'\nBy: '+auth,
+      uuid:uuid4(), version:[1,0,0], min_engine_version:[1,20,0] },
+    modules:[{ description:'Behaviors', type:'data', uuid:uuid4(), version:[1,0,0] }],
+    dependencies:[{ uuid:rpDepUUID, version:[1,0,0] }]
+  };
+
+  /* ── Attachable ── */
+  const attachable = {
+    format_version:'1.8.0',
+    'minecraft:attachable':{ description:{
+      identifier:`${ns}:${id}`,
+      materials:{ default:'entity_alphatest', enchanted:'entity_alphatest_glint' },
+      textures:{ default:texPath, enchanted:'textures/misc/enchanted_item_glint' },
+      geometry:{ default:geoId },
+      scripts:{ pre_animation:['variable.item_bob = 0.0;'],
+        animate:['hold_first_person_main_hand','hold_third_person_main_hand'] },
+      animations:{
+        hold_first_person_main_hand:'animation.armor_stand.holding_firstperson',
+        hold_third_person_main_hand:'animation.armor_stand.holding'
+      },
+      render_controllers:['controller.render.item_default']
+    }}
+  };
+
+  /* ── item_texture.json ── */
+  const itemTexture = {
+    resource_pack_name: pn,
+    texture_name:'atlas.items',
+    texture_data:{ [id]:{ textures:texPath } }
+  };
+
+  /* ── BP item ── */
+  const itemComponents = {
+    'minecraft:max_stack_size': ss,
+    'minecraft:icon':{ texture:id },
+    'minecraft:display_name':{ value:dn },
+  };
+  if(dur>0) itemComponents['minecraft:durability'] = { max_durability:dur };
+
+  const bpItem = {
+    format_version:'1.20.30',
+    'minecraft:item':{ description:{ identifier:`${ns}:${id}`, category:cat }, components:itemComponents }
+  };
+
+  /* ── geo.json content ── */
+  const geoContent = modelState.type==='obj'
+    ? JSON.stringify(modelState.geoJson, null, 2)
+    : modelState.rawText;
+
+  /* ── Pack icon (canvas) ── */
+  setStatus('Generando iconos...');
+  const iconB64 = makePackIcon(pn);
+
+  /* ── Build zips ── */
+  setStatus('Empaquetando RP...');
+
+  const rpZip = new JSZip();
+  rpZip.file('manifest.json', JSON.stringify(rpManifest,null,2));
+  rpZip.file('pack_icon.png', iconB64, {base64:true});
+  rpZip.file(`attachables/${ns}.${id}.json`, JSON.stringify(attachable,null,2));
+  rpZip.file(`models/entity/${ns}.${id}.geo.json`, geoContent);
+  rpZip.file(`textures/items/${ns}/${id}.png`,
+    textureState ? textureState.dataUrl.split(',')[1] : makeDefaultTex(), {base64:true});
+  rpZip.file('textures/item_texture.json', JSON.stringify(itemTexture,null,2));
+
+  const rpBlob = await rpZip.generateAsync({type:'blob', compression:'DEFLATE', compressionOptions:{level:6}});
+
+  setStatus('Empaquetando BP...');
+  const bpZip = new JSZip();
+  bpZip.file('manifest.json', JSON.stringify(bpManifest,null,2));
+  bpZip.file('pack_icon.png', iconB64, {base64:true});
+  bpZip.file(`items/${ns}.${id}.json`, JSON.stringify(bpItem,null,2));
+
+  const bpBlob = await bpZip.generateAsync({type:'blob', compression:'DEFLATE', compressionOptions:{level:6}});
+
+  setStatus('Generando .mcaddon...');
+  const addon = new JSZip();
+  addon.file(`${pn.replace(/\s/g,'_')}_RP.mcpack`, rpBlob);
+  addon.file(`${pn.replace(/\s/g,'_')}_BP.mcpack`, bpBlob);
+
+  const finalBlob = await addon.generateAsync({type:'blob', compression:'DEFLATE', compressionOptions:{level:5}});
+
+  const url = URL.createObjectURL(finalBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${pn.replace(/[^a-zA-Z0-9]/g,'_')}.mcaddon`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+
+  btn.disabled=false; setStatus('');
+  notify('🎮 .mcaddon generado — ábrelo con Minecraft Bedrock!');
+}
+
+/* ───────────────────────────────────────────
+   ICON & DEFAULT TEXTURE
+─────────────────────────────────────────── */
+function makePackIcon(name){
+  const c=document.createElement('canvas'); c.width=128; c.height=128;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#0c1a2e'; ctx.fillRect(0,0,128,128);
+  ctx.strokeStyle='#67e8f9'; ctx.lineWidth=3;
+  ctx.strokeRect(4,4,120,120);
+  ctx.font='bold 52px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#67e8f9';
+  ctx.fillText((name||'?')[0].toUpperCase(),64,68);
+  return c.toDataURL('image/png').split(',')[1];
+}
+
+function makeDefaultTex(){
+  const c=document.createElement('canvas'); c.width=16; c.height=16;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#7c3aed'; ctx.fillRect(0,0,16,16);
+  ctx.fillStyle='#a78bfa';
+  for(let i=0;i<16;i+=4) for(let j=0;j<16;j+=4)
+    if((i+j)%8===0) ctx.fillRect(i,j,4,4);
+  return c.toDataURL('image/png').split(',')[1];
+}
+
+/* ───────────────────────────────────────────
+   UTILS
+─────────────────────────────────────────── */
+function val(id){ return document.getElementById(id).value.trim(); }
+
+/* ───────────────────────────────────────────
+   INIT
+─────────────────────────────────────────── */
+window.addEventListener('load', ()=>{
+  initThree();
+  updateTree();
+  // Viewport overlay (hidden by default, shown when model loaded)
+  const overlay = document.getElementById('vpOverlay');
+  // Updated when model loads
+});
+
+// Keep overlay updated
+const origLoadMesh = loadMeshToScene;
+window.loadMeshToScene = function(geo){
+  origLoadMesh(geo);
+  setTimeout(()=>{
+    if(modelState){
+      const el=document.getElementById('vpOverlay');
+      el.classList.remove('hidden');
+      el.innerHTML=`<b>${modelState.identifier}</b><br>Tipo: ${modelState.type==='geo'?'geo.json':'OBJ → poly_mesh'}`
+        + (modelState.cubes?`<br>Cubes: ${modelState.cubes}`:'');
+    }
+  },100);
+};
+</script>
+</body>
+</html>
